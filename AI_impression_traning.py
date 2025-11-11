@@ -40,18 +40,81 @@ st.markdown("""
         padding: 12px 28px !important;
         border-radius: 10px !important;
     }
+            
+    h1#impression-orientation-classifier-and-editor {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 0 !important;
+    }
+            
     </style>
 """, unsafe_allow_html=True)
 
 
 st.title("Impression Orientation Classifier and Editor")
 
-# 📁 Folder z plikami STL
-folder = st.text_input("Path to the folder with STL files:", "data/ears")
 
-if not os.path.exists(folder):
-    st.warning("Folder does not exist.")
+uploaded_files = st.file_uploader(
+    "Upload one or more STL files", 
+    type=["stl"], 
+    accept_multiple_files=True
+    
+)
+
+st.markdown("""
+    <style>
+    /* Ukryj każdy pojedynczy plik */
+    [data-testid="stFileUploaderFile"] {
+        display: none !important;
+    }
+
+    /* Ukryj listę plików */
+    [data-testid="stFileUploaderFileList"] {
+        display: none !important;
+    }
+
+    /* ❗ NOWY, POPRAWNY SELEKTOR DLA CAŁEGO WIDŻETU PAGINACJI ❗ */
+    [data-testid="stFileUploaderPagination"] {
+        display: none !important;
+    }
+    
+    /* Wciąż trzymaj ten poniżej jako zabezpieczenie, choć rzadko działa sam */
+    [data-testid="stFileUploaderFilePaginator"] {
+        display: none !important;
+    }
+
+    /* Wersja alternatywna (na wypadek zmian w HTML Streamlita) */
+    [data-testid="stFileUploader"] p {
+        display: none !important;
+    }
+
+    /* Poprawka estetyczna */
+    [data-testid="stFileUploaderDropzone"] {
+        margin-bottom: 0 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
+if uploaded_files:
+    import tempfile, os
+    folder = tempfile.mkdtemp()
+    for file in uploaded_files:
+        with open(os.path.join(folder, file.name), "wb") as f:
+            f.write(file.getbuffer())
+    st.success(f"{len(uploaded_files)} files uploaded successfully.")
+else:
+    st.info("Please upload STL files to start.")
     st.stop()
+
+
+
+# 📁 Folder z plikami STL
+#folder = st.text_input("Path to the folder with STL files:", "data/ears")
+
+#if not os.path.exists(folder):
+#    st.warning("Folder does not exist.")
+#    st.stop()
 
 # 📂 Folder docelowy
 processed_dir = os.path.join(folder, "processed")
@@ -323,6 +386,6 @@ st.subheader(f"File in use: `{selected_file}`")
 
 
 # 📜 Podgląd etykiet
-st.subheader("Labels added:")
+st.subheader("Labels:")
 st.dataframe(labels_df)
 #st.dataframe(labels_df.tail(10))
