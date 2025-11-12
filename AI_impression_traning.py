@@ -3,8 +3,11 @@ import plotly.graph_objects as go
 import trimesh
 import os
 import pandas as pd
-import shutil
 import numpy as np
+import tempfile
+import zipfile
+from io import BytesIO
+
 
 st.set_page_config(page_title="Impression Browser", layout="wide")
 
@@ -50,6 +53,26 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+    <style>
+    /* Ukryj każdy pojedynczy plik */
+    [data-testid="stFileUploaderFile"] {
+        display: none !important;
+    }
+
+    /* ❗ NOWY, POPRAWNY SELEKTOR DLA CAŁEGO WIDŻETU PAGINACJI ❗ */
+    [data-testid="stFileUploaderPagination"] {
+        display: none !important;
+    }
+
+    /* Wersja alternatywna (na wypadek zmian w HTML Streamlita) */
+    [data-testid="stFileUploader"] p {
+        display: none !important;
+    }
+
+    </style>
+""", unsafe_allow_html=True)
+
 
 st.title("Impression Orientation Classifier and Editor")
 
@@ -61,53 +84,96 @@ uploaded_files = st.file_uploader(
     
 )
 
-st.markdown("""
-    <style>
-    /* Ukryj każdy pojedynczy plik */
-    [data-testid="stFileUploaderFile"] {
-        display: none !important;
-    }
+if "folder" not in st.session_state:
+    st.session_state.folder = tempfile.mkdtemp()
+folder = st.session_state.folder
 
-    /* Ukryj listę plików */
-    [data-testid="stFileUploaderFileList"] {
-        display: none !important;
-    }
+processed_dir = os.path.join(folder, "processed")
+os.makedirs(processed_dir, exist_ok=True)
 
-    /* ❗ NOWY, POPRAWNY SELEKTOR DLA CAŁEGO WIDŻETU PAGINACJI ❗ */
-    [data-testid="stFileUploaderPagination"] {
-        display: none !important;
-    }
-    
-    /* Wciąż trzymaj ten poniżej jako zabezpieczenie, choć rzadko działa sam */
-    [data-testid="stFileUploaderFilePaginator"] {
-        display: none !important;
-    }
-
-    /* Wersja alternatywna (na wypadek zmian w HTML Streamlita) */
-    [data-testid="stFileUploader"] p {
-        display: none !important;
-    }
-
-    /* Poprawka estetyczna */
-    [data-testid="stFileUploaderDropzone"] {
-        margin-bottom: 0 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-
-if uploaded_files:
-    import tempfile, os
-    folder = tempfile.mkdtemp()
-    for file in uploaded_files:
-        with open(os.path.join(folder, file.name), "wb") as f:
-            f.write(file.getbuffer())
-    st.success(f"{len(uploaded_files)} files uploaded successfully.")
-else:
+if not uploaded_files:
     st.info("Please upload STL files to start.")
     st.stop()
 
+# --- CSV ---
+csv_path = os.path.join(folder, "labels.csv")
 
+if "labels_df" not in st.session_state:
+    if os.path.exists(csv_path):
+        st.session_state.labels_df = pd.read_csv(csv_path)
+    else:
+        st.session_state.labels_df = pd.DataFrame(columns=[
+            "original_filename", "new_filename", "side", "band",
+            "rotation_x", "rotation_y", "rotation_z"
+        ])
+
+# 📦 Zapisz wgrane pliki do folderu tymczasowego
+for file in uploaded_files:
+    file_path = os.path.join(folder, file.name)
+    with open(file_path, "wb") as f:
+        f.write(file.getbuffer())
+
+# 📋 Lista plików STL do przetworzenia
+files = [f.name for f in uploaded_files if f.name.lower().endswith(".stl")]
+
+if not files:
+    st.success("🎉 All Files processed!")
+    st.dataframe(st.session_state.labels_df)
+    st.stop()
+
+# --- Stan sesji ---
+if "scan_index" not in st.session_state:
+    st.session_state.scan_index = len(os.listdir(processed_dir)) + 1
+if "current_index" not in st.session_state:
+    st.session_state.current_index = 0
+if "rot_x" not in st.session_state:
+    st.session_state.rot_x = 0
+if "rot_y" not in st.session_state:
+    st.session_state.rot_y = 0
+if "rot_z" not in st.session_state:
+    st.session_state.rot_z = 0
+if "side_selection" not in st.session_state:
+    st.session_state.side_selection = ""
+if "band_selection" not in st.session_state:
+    st.session_state.band_selection = ""
+
+if "total_files" not in st.session_state:
+    st.session_state.total_files = len(files)
+
+remaining = st.session_state.total_files - st.session_state.current_index
+st.markdown(f"### 📊 Files remaining: **{remaining} / {st.session_state.total_files}**")
+
+
+# --- Aktualny plik ---
+if st.session_state.current_index >= len(files):
+    st.success("✅ All files processed!")
+    st.dataframe(st.session_state.labels_df)
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        for filename in os.listdir(processed_dir):
+            file_path = os.path.join(processed_dir, filename)
+            zipf.write(file_path, arcname=filename)
+        st.session_state.labels_df.to_csv(csv_path, index=False)
+        zipf.write(csv_path, arcname="labels.csv")
+    zip_buffer.seek(0)
+    st.download_button(
+        label="📦 Download files (.zip)",
+        data=zip_buffer,
+        file_name="processed_files.zip",
+        mime="application/zip"
+    )
+    st.stop()
+
+
+selected_file = files[st.session_state.current_index]
+file_path = os.path.join(folder, selected_file)
+
+# --- Wczytaj model ---
+try:
+    mesh = trimesh.load_mesh(file_path)
+except Exception as e:
+    st.error(f"Failed to load file {selected_file}: {e}")
+    st.stop()
 
 # 📁 Folder z plikami STL
 #folder = st.text_input("Path to the folder with STL files:", "data/ears")
@@ -116,33 +182,6 @@ else:
 #    st.warning("Folder does not exist.")
 #    st.stop()
 
-# 📂 Folder docelowy
-processed_dir = os.path.join(folder, "processed")
-backup_dir = os.path.join(folder, "backup")
-os.makedirs(processed_dir, exist_ok=True)
-os.makedirs(backup_dir, exist_ok=True)
-
-# 📄 CSV z etykietami
-csv_path = os.path.join(folder, "labels.csv")
-if os.path.exists(csv_path):
-    labels_df = pd.read_csv(csv_path)
-else:
-    labels_df = pd.DataFrame(columns=["original_filename", "new_filename", "side", "band", "rotation_x", "rotation_y", "rotation_z"])
-
-# 📋 Pliki do przetworzenia (odświeżane przy każdym uruchomieniu skryptu)
-files = [
-    f for f in os.listdir(folder)
-    if f.lower().endswith(".stl") and os.path.isfile(os.path.join(folder, f)) and f != "labels.csv"
-]
-
-if not files:
-    st.success("🎉 All Files processed!")
-    st.dataframe(labels_df) # Wyświetlenie końcowej tabeli z etykietami
-    st.stop()
-
-# ⚠️ UŻYCIE PIERWSZEGO PLIKU Z AKTUALNEJ LISTY
-selected_file = files[0] 
-file_path = os.path.join(folder, selected_file)
 
 # --- INICJALIZACJA STANU SESJI ---
 # 🧠 Numer skanu
@@ -189,11 +228,8 @@ def rotate_mesh(mesh, rx, ry, rz):
 
 def skip_file():
     current_file = st.session_state.current_file
-    original_path = os.path.join(folder, current_file)
-
     try:
         # Przenieś pominięty plik do folderu backup, aby nie był ponownie wczytany
-        shutil.move(original_path, os.path.join(backup_dir, current_file))
         st.toast(f"File skipped: {current_file}", icon="➡️")
     except Exception as e:
         st.error(f"Error: {e}")
@@ -201,73 +237,60 @@ def skip_file():
 
     # Zwiększamy indeks skanu, aby zachować ciągłość numeracji
         # 🔄 RESETOWANIE STANU SESJI
+    st.session_state.scan_index += 1
+    st.session_state.current_index += 1
     st.session_state.rot_x = 0
     st.session_state.rot_y = 0
     st.session_state.rot_z = 0
     st.session_state.side_selection = ""
     st.session_state.band_selection = ""
-    st.session_state.scan_index += 1
-    st.session_state.scan_index += 1
+    
   
 
 # 💾 FUNKCJA CALLBACK
 def reset_and_process():
-    # Pobranie danych ze stanu sesji
+    selected_file = files[st.session_state.current_index]
+    file_path = os.path.join(folder, selected_file)
+
     side = st.session_state.side_selection
     band = st.session_state.band_selection
+    if side == "" or band == "":
+        st.error("Please select side and canal length.")
+        return
     rot_x = st.session_state.rot_x
     rot_y = st.session_state.rot_y
     rot_z = st.session_state.rot_z
-
-    if side == "":
-        st.error("Select impression side:")
-        return
-
-    if band == "":
-        st.error("Select canal length:")
-        return
-
-    # Przetwarzanie nazwy
     band_code = {"too short": 0, "1st band": 1, "2nd band": 2}[band]
     scan_num = st.session_state.scan_index
-    current_file = st.session_state.current_file # Nazwa pliku jest w sesji
-    
     new_name = f"{scan_num}{side}_{band_code}.stl"
     new_path = os.path.join(processed_dir, new_name)
-    original_path = os.path.join(folder, current_file)
 
-    # 🔸 Wczytaj ponownie, zastosuj rotację i zapisz
     try:
-        final_mesh = trimesh.load_mesh(original_path)
-        final_mesh = rotate_mesh(final_mesh, rot_x, rot_y, rot_z)
-        final_mesh.export(new_path)
+        mesh = trimesh.load_mesh(file_path)
+        mesh = rotate_mesh(mesh, rot_x, rot_y, rot_z)
+        mesh.export(new_path)
     except Exception as e:
-        st.error(f"Can't save file: {e}")
-        return # Przerwij funkcję jeśli błąd zapisu
-
-    # 🔸 Usuń (Przenieś) oryginalny plik
-    try:
-        shutil.move(original_path, os.path.join(backup_dir, current_file))
-    except Exception as e:
-        st.error(f"Can't move file: {e}")
+        st.error(f"Error while saving: {e}")
         return
 
-    # 🔸 Zapisz do CSV
-    global labels_df # Użycie globalnej zmiennej DataFrame
-    new_row = pd.DataFrame([[current_file, new_name, side, band, rot_x, rot_y, rot_z]],
-                            columns=["original_filename", "new_filename", "side", "band", "rotation_x", "rotation_y", "rotation_z"])
-    labels_df = pd.concat([labels_df, new_row], ignore_index=True)
-    labels_df.to_csv(csv_path, index=False)
-    
-    st.toast(f"Saved as: {new_name}", icon="💾")
+    # --- Zapisz do CSV ---
+    new_row = pd.DataFrame([[selected_file, new_name, side, band, rot_x, rot_y, rot_z]],
+                           columns=st.session_state.labels_df.columns)
+    st.session_state.labels_df = pd.concat(
+        [st.session_state.labels_df, new_row],
+        ignore_index=True
+    )
+    st.session_state.labels_df.to_csv(csv_path, index=False)
 
-    # 🔄 RESETOWANIE STANU SESJI
+    st.toast(f"💾 Saved as {new_name}")
+    st.session_state.scan_index += 1
+    st.session_state.current_index += 1
     st.session_state.rot_x = 0
     st.session_state.rot_y = 0
     st.session_state.rot_z = 0
     st.session_state.side_selection = ""
     st.session_state.band_selection = ""
-    st.session_state.scan_index += 1
+   
     
     # Po zakończeniu callbacku Streamlit automatycznie przeładuje skrypt,
     # co spowoduje odświeżenie listy 'files' i wybranie kolejnego pliku.
@@ -305,8 +328,7 @@ fig = go.Figure(data=[
         )
     )
 ])
-
-
+    
 fig.update_layout(
     scene=dict(
         xaxis=dict(
@@ -355,31 +377,30 @@ st.plotly_chart(fig, use_container_width=True)
 
 col1, col2, col3 = st.columns([2,2,1], border=True)
 with col1:
-    st.radio("Side:", ["L","", "R"], key="side_selection", horizontal=True)
+    pass
 with col2:
+    st.radio("Side:", ["L","", "R"], key="side_selection", horizontal=True)
     st.radio("Canal length:", ["","too short", "1st band", "2nd band"], key="band_selection", horizontal=True)
 with col3:
-    st.markdown("""
-        <style>
-        .right-align {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end; /* wyrównanie do prawej */
-            gap: 8px;
-        }
-        .right-align button {
-            min-width: 18px; /* opcjonalnie: szerokość przycisków */
-        }
-        </style>
-        <div class="right-align">
-    """, unsafe_allow_html=True)
+    st.button("💾 Save and next file", on_click=reset_and_process)
+    st.button("⏭️ Skip file", on_click=skip_file)
 
-    # 💾 Zapis i przejście dalej
-    st.button("Save and next file", on_click=reset_and_process)
-    # ⏭️ Pominięcie pliku
-    st.button("Skip file", on_click=skip_file)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    # --- ZIP zawsze dostępny ---
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        for filename in os.listdir(processed_dir):
+            file_path = os.path.join(processed_dir, filename)
+            zipf.write(file_path, arcname=filename)
+        st.session_state.labels_df.to_csv(csv_path, index=False)
+        zipf.write(csv_path, arcname="labels.csv")
+    zip_buffer.seek(0)
+    st.download_button(
+        label="📦 Download files (.zip)",
+        data=zip_buffer,
+        file_name="processed_files.zip",
+        mime="application/zip",
+        disabled=len(os.listdir(processed_dir)) == 0  # nieaktywny, gdy brak plików
+    )
 
 
 st.subheader(f"File in use: `{selected_file}`")
@@ -387,5 +408,5 @@ st.subheader(f"File in use: `{selected_file}`")
 
 # 📜 Podgląd etykiet
 st.subheader("Labels:")
-st.dataframe(labels_df)
+st.dataframe(st.session_state.labels_df)
 #st.dataframe(labels_df.tail(10))
