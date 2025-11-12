@@ -225,6 +225,15 @@ def rotate_mesh(mesh, rx, ry, rz):
     mesh.apply_transform(transform)
     return mesh
 
+def center_mesh(mesh):
+    """
+    Przesuwa siatkę tak, by środek jej osiowy znalazł się w (0, 0, 0).
+    """
+    # Można użyć środka bounding boxa lub środka masy
+    center = mesh.center_mass
+    mesh.apply_translation(-center)
+    return mesh
+
 
 def skip_file():
     current_file = st.session_state.current_file
@@ -267,7 +276,11 @@ def reset_and_process():
 
     try:
         mesh = trimesh.load_mesh(file_path)
+        if isinstance(mesh, trimesh.Scene):
+            mesh = trimesh.util.concatenate(tuple(mesh.dump()))
+
         mesh = rotate_mesh(mesh, rot_x, rot_y, rot_z)
+        mesh = center_mesh(mesh)
         mesh.export(new_path)
     except Exception as e:
         st.error(f"Error while saving: {e}")
