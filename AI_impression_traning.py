@@ -53,25 +53,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# st.markdown("""
-#     <style>
-#     /* Ukryj każdy pojedynczy plik */
-#     [data-testid="stFileUploaderFile"] {
-#         display: none !important;
-#     }
 
-#     /* ❗ NOWY, POPRAWNY SELEKTOR DLA CAŁEGO WIDŻETU PAGINACJI ❗ */
-#     [data-testid="stFileUploaderPagination"] {
-#         display: none !important;
-#     }
-
-#     /* Wersja alternatywna (na wypadek zmian w HTML Streamlita) */
-#     [data-testid="stFileUploader"] p {
-#         display: none !important;
-#     }
-
-#     </style>
-# """, unsafe_allow_html=True)
 
 
 st.title("Impression Orientation Classifier and Editor")
@@ -80,10 +62,38 @@ st.title("Impression Orientation Classifier and Editor")
 uploaded_files = st.file_uploader(
     "Upload one or more STL files", 
     type=["stl"], 
-    accept_multiple_files=True
-    
+    accept_multiple_files=True,
+    label_visibility="collapsed",
 )
 
+if uploaded_files:
+     st.markdown("""
+     <style>
+     /* Ukryj każdy pojedynczy plik */
+     [data-testid="stFileUploaderFile"] {
+         display: none !important;
+     }
+
+     /* ❗ NOWY, POPRAWNY SELEKTOR DLA CAŁEGO WIDŻETU PAGINACJI ❗ */
+     [data-testid="stFileUploaderPagination"] {
+         display: none !important;
+     }
+
+     /* Wersja alternatywna (na wypadek zmian w HTML Streamlita) */
+     [data-testid="stFileUploader"] p {
+         display: none !important;
+     }
+
+     </style>
+ """, unsafe_allow_html=True)
+
+# Jeśli użytkownik wybrał pliki, pokaż komunikat ładowania
+if uploaded_files and len(uploaded_files) > 0:
+    with st.spinner("🌀 Loading STL files into the program... Please wait."):
+        for file in uploaded_files:
+            pass
+
+            
 if "folder" not in st.session_state:
     st.session_state.folder = tempfile.mkdtemp()
 folder = st.session_state.folder
@@ -423,4 +433,3 @@ st.subheader(f"File in use: `{selected_file}`")
 st.subheader("Labels:")
 st.dataframe(st.session_state.labels_df)
 #st.dataframe(labels_df.tail(10))
-
