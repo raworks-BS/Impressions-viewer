@@ -9,7 +9,18 @@ import zipfile
 from io import BytesIO
 
 
+
+
+save_target_dir = st.text_input("Output:", "data/saved_output")
 st.set_page_config(page_title="Impression Browser", layout="wide")
+
+# Create if missing
+if not os.path.exists(save_target_dir):
+    try:
+        os.makedirs(save_target_dir, exist_ok=True)
+    except Exception as e:
+        st.error(f"Cannot create directory: {e}")
+        st.stop()
 
 st.markdown("""
     <style>
@@ -122,6 +133,8 @@ for file in uploaded_files:
     file_path = os.path.join(folder, file.name)
     with open(file_path, "wb") as f:
         f.write(file.getbuffer())
+
+
 
 # 📋 Lista plików STL do przetworzenia
 files = [f.name for f in uploaded_files if f.name.lower().endswith(".stl")]
@@ -282,7 +295,7 @@ def reset_and_process():
     band_code = {"too short": 0, "1st band": 1, "2nd band": 2}[band]
     scan_num = st.session_state.scan_index
     new_name = f"{scan_num}{side}_{band_code}.stl"
-    new_path = os.path.join(processed_dir, new_name)
+    new_path = os.path.join(save_target_dir, new_name)
 
     try:
         mesh = trimesh.load_mesh(file_path)
