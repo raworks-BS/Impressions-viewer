@@ -109,15 +109,6 @@ os.makedirs(processed_dir, exist_ok=True)
 if not uploaded_files:
     st.info("Please upload STL files to start.")
     st.stop()
-
-save_target_dir = st.text_input("Output:", "data/saved_output")
-# Create if missing
-if not os.path.exists(save_target_dir):
-    try:
-        os.makedirs(save_target_dir, exist_ok=True)
-    except Exception as e:
-        st.error(f"Cannot create directory: {e}")
-        st.stop()
         
 # --- CSV ---
 csv_path = os.path.join(folder, "labels.csv")
@@ -298,7 +289,7 @@ def reset_and_process():
     band_code = {"too short": 0, "1st band": 1, "2nd band": 2}[band]
     scan_num = st.session_state.scan_index
     new_name = f"{scan_num}{side}_{band_code}.stl"
-    new_path = os.path.join(save_target_dir, new_name)
+    new_path = os.path.join(processed_dir, new_name)
 
     try:
         mesh = trimesh.load_mesh(file_path)
@@ -449,3 +440,4 @@ st.subheader(f"File in use: `{selected_file}`")
 st.subheader("Labels:")
 st.dataframe(st.session_state.labels_df)
 #st.dataframe(labels_df.tail(10))
+
