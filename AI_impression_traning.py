@@ -11,17 +11,10 @@ from io import BytesIO
 
 
 
+
 st.set_page_config(page_title="Impression Browser", layout="wide")
-save_target_dir = st.text_input("Output:", "data/saved_output")
 
 
-# Create if missing
-if not os.path.exists(save_target_dir):
-    try:
-        os.makedirs(save_target_dir, exist_ok=True)
-    except Exception as e:
-        st.error(f"Cannot create directory: {e}")
-        st.stop()
 
 st.markdown("""
     <style>
@@ -117,6 +110,15 @@ if not uploaded_files:
     st.info("Please upload STL files to start.")
     st.stop()
 
+save_target_dir = st.text_input("Output:", "data/saved_output")
+# Create if missing
+if not os.path.exists(save_target_dir):
+    try:
+        os.makedirs(save_target_dir, exist_ok=True)
+    except Exception as e:
+        st.error(f"Cannot create directory: {e}")
+        st.stop()
+        
 # --- CSV ---
 csv_path = os.path.join(folder, "labels.csv")
 
@@ -447,4 +449,3 @@ st.subheader(f"File in use: `{selected_file}`")
 st.subheader("Labels:")
 st.dataframe(st.session_state.labels_df)
 #st.dataframe(labels_df.tail(10))
-
