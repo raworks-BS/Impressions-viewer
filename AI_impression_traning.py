@@ -11,8 +11,9 @@ from io import BytesIO
 
 
 
-save_target_dir = st.text_input("Output:", "data/saved_output")
 st.set_page_config(page_title="Impression Browser", layout="wide")
+save_target_dir = st.text_input("Output:", "data/saved_output")
+
 
 # Create if missing
 if not os.path.exists(save_target_dir):
@@ -446,3 +447,4 @@ st.subheader(f"File in use: `{selected_file}`")
 st.subheader("Labels:")
 st.dataframe(st.session_state.labels_df)
 #st.dataframe(labels_df.tail(10))
+
