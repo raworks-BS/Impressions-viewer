@@ -8,9 +8,7 @@ import tempfile
 import zipfile
 from io import BytesIO
 
-
-
-
+st.subheader(f"v5")
 
 st.set_page_config(page_title="Impression Browser", layout="wide")
 
@@ -92,11 +90,6 @@ if uploaded_files:
      </style>
  """, unsafe_allow_html=True)
 
-# Jeśli użytkownik wybrał pliki, pokaż komunikat ładowania
-if uploaded_files and len(uploaded_files) > 0:
-    with st.spinner("🌀 Loading STL files into the program... Please wait."):
-        for file in uploaded_files:
-            pass
 
             
 if "folder" not in st.session_state:
@@ -109,7 +102,9 @@ os.makedirs(processed_dir, exist_ok=True)
 if not uploaded_files:
     st.info("Please upload STL files to start.")
     st.stop()
-        
+
+
+
 # --- CSV ---
 csv_path = os.path.join(folder, "labels.csv")
 
@@ -123,10 +118,11 @@ if "labels_df" not in st.session_state:
         ])
 
 # 📦 Zapisz wgrane pliki do folderu tymczasowego
-for file in uploaded_files:
-    file_path = os.path.join(folder, file.name)
-    with open(file_path, "wb") as f:
-        f.write(file.getbuffer())
+
+    for file in uploaded_files:
+        file_path = os.path.join(folder, file.name)
+        with open(file_path, "wb") as f:
+            f.write(file.getbuffer())
 
 
 
@@ -153,7 +149,6 @@ if "side_selection" not in st.session_state:
     st.session_state.side_selection = ""
 if "band_selection" not in st.session_state:
     st.session_state.band_selection = ""
-
 if "total_files" not in st.session_state:
     st.session_state.total_files = len(files)
 
@@ -180,7 +175,6 @@ if st.session_state.current_index >= len(files):
         mime="application/zip"
     )
     st.stop()
-
 
 selected_file = files[st.session_state.current_index]
 file_path = os.path.join(folder, selected_file)
@@ -255,8 +249,8 @@ def center_mesh(mesh):
 def skip_file():
     current_file = st.session_state.current_file
     try:
-        # Przenieś pominięty plik do folderu backup, aby nie był ponownie wczytany
         st.toast(f"File skipped: {current_file}", icon="➡️")
+        
     except Exception as e:
         st.error(f"Error: {e}")
         return
@@ -270,6 +264,17 @@ def skip_file():
     st.session_state.rot_z = 0
     st.session_state.side_selection = ""
     st.session_state.band_selection = ""
+    previous_file = st.session_state.get("current_file", None)
+    st.session_state.previous_file = previous_file
+    
+
+    if "previous_file" in st.session_state:
+        prev_temp_path = os.path.join(folder, st.session_state.previous_file)
+        # Sprawdź, czy plik istnieje i usuń
+    if os.path.exists(prev_temp_path):
+        os.remove(prev_temp_path)
+    else:
+        st.warning(f"File {st.session_state.previous_file} not exist in temp")
     
   
 
@@ -311,7 +316,6 @@ def reset_and_process():
         ignore_index=True
     )
     st.session_state.labels_df.to_csv(csv_path, index=False)
-
     st.toast(f"💾 Saved as {new_name}")
     st.session_state.scan_index += 1
     st.session_state.current_index += 1
@@ -320,14 +324,26 @@ def reset_and_process():
     st.session_state.rot_z = 0
     st.session_state.side_selection = ""
     st.session_state.band_selection = ""
-   
     
+    previous_file = st.session_state.get("current_file", None)
+    st.session_state.previous_file = previous_file
+    
+
+    if "previous_file" in st.session_state:
+        prev_temp_path = os.path.join(folder, st.session_state.previous_file)
+        # Sprawdź, czy plik istnieje i usuń
+    if os.path.exists(prev_temp_path):
+        os.remove(prev_temp_path)
+    else:
+        st.warning(f"File {st.session_state.previous_file} not exist in temp")
+
+
     # Po zakończeniu callbacku Streamlit automatycznie przeładuje skrypt,
     # co spowoduje odświeżenie listy 'files' i wybranie kolejnego pliku.
 
 
 # 🔄 Suwaki rotacji
-st.subheader("Set new orientation")
+#st.subheader("Set new orientation")
 col1, col2, col3 = st.columns(3)
 with col1:
     # Używamy key dla płynnej interakcji
@@ -432,12 +448,13 @@ with col3:
         disabled=len(os.listdir(processed_dir)) == 0  # nieaktywny, gdy brak plików
     )
 
-
 st.subheader(f"File in use: `{selected_file}`")
-
+if "previous_file" in st.session_state:
+    prev_temp_path = os.path.join(folder, st.session_state.previous_file)
+    st.subheader(f"Previous file: {prev_temp_path}")
 
 # 📜 Podgląd etykiet
 st.subheader("Labels:")
 st.dataframe(st.session_state.labels_df)
-#st.dataframe(labels_df.tail(10))
 
+#st.dataframe(labels_df.tail(10))
