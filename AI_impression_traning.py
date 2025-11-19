@@ -179,12 +179,6 @@ if st.session_state.current_index >= len(files):
 selected_file = files[st.session_state.current_index]
 file_path = os.path.join(folder, selected_file)
 
-# --- Wczytaj model ---
-try:
-    mesh = trimesh.load_mesh(file_path)
-except Exception as e:
-    st.error(f"Failed to load file {selected_file}: {e}")
-    st.stop()
 
 # 📁 Folder z plikami STL
 #folder = st.text_input("Path to the folder with STL files:", "data/ears")
@@ -419,7 +413,26 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 🏷️ Etykiety
+# miejsce w session_state na ZIP
+if "zip_buffer" not in st.session_state:
+    st.session_state.zip_buffer = None
+
+def generate_zip():
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zipf:
+        # dodaj przetworzone pliki
+        for filename in os.listdir(processed_dir):
+            file_path = os.path.join(processed_dir, filename)
+            zipf.write(file_path, arcname=filename)
+
+        # dodaj CSV
+        st.session_state.labels_df.to_csv(csv_path, index=False)
+        zipf.write(csv_path, arcname="labels.csv")
+
+    zip_buffer.seek(0)
+    st.session_state.zip_buffer = zip_buffer
+    st.success("ZIP wygenerowany!")
+
 
 col1, col2, col3 = st.columns([2,2,1], border=True)
 with col1:
@@ -430,22 +443,14 @@ with col2:
 with col3:
     st.button("💾 Save and next file", on_click=reset_and_process)
     st.button("⏭️ Skip file", on_click=skip_file)
+    st.button("🔄 Generate ZIP", on_click=generate_zip)
 
-    # --- ZIP zawsze dostępny ---
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zipf:
-        for filename in os.listdir(processed_dir):
-            file_path = os.path.join(processed_dir, filename)
-            zipf.write(file_path, arcname=filename)
-        st.session_state.labels_df.to_csv(csv_path, index=False)
-        zipf.write(csv_path, arcname="labels.csv")
-    zip_buffer.seek(0)
-    st.download_button(
-        label="📦 Download files (.zip)",
-        data=zip_buffer,
-        file_name="processed_files.zip",
-        mime="application/zip",
-        disabled=len(os.listdir(processed_dir)) == 0  # nieaktywny, gdy brak plików
+    if st.session_state.zip_buffer:
+        st.download_button(
+            label="⬇️ Download ZIP",
+            data=st.session_state.zip_buffer,
+            file_name="processed_files.zip",
+            mime="application/zip",
     )
 
 st.subheader(f"File in use: `{selected_file}`")
